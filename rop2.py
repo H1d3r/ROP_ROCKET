@@ -9675,7 +9675,7 @@ def loadRegP(z,i, bad, length1,excludeRegs,pk,apiCode,finalTypePattern,multiApi,
 			return False, 0,0,reg
 
 	except Exception as e:
-		dp (e,"\n",traceback.format_exc())
+		print (e,"\n",traceback.format_exc())
 
 def loadRegEmu(reg,bad,length1,excludeRegs,val,comment=None):
 	#not used 
@@ -10432,6 +10432,11 @@ def findMovDerefGetStack(id_func,reg,bad,length1, excludeRegs,regsNotUsed,espDes
 	# print (yel,"findMovDerefGetStack",reg, "excludeRegs", excludeRegs, "regsNotUsed", regsNotUsed, "distEsp",hex(distEsp), "arch",arch,res)
 	dp ("***regsNotUsed", regsNotUsed)
 
+	if comment==None:
+		comment=""
+	else:
+		comment="loading for " + comment
+
 	try:
 		for op2 in regsNotUsed:
 			cMEsp=0
@@ -10440,7 +10445,7 @@ def findMovDerefGetStack(id_func,reg,bad,length1, excludeRegs,regsNotUsed,espDes
 			# print ("loadreg2", arch)
 # def loadReg(reg,bad,length1,excludeRegs,val,comment=None, isVal=False,ID=None,gSetID=None, gTrackObj=None, arch=32):
 			
-			foundL1, p2, chP = loadReg(op2,bad,length1,excludeRegs2,distEsp, "loading for " + comment, False, 34343, None, None,arch)
+			foundL1, p2, chP = loadReg(op2,bad,length1,excludeRegs2,distEsp,  comment, False, 34343, None, None,arch)
 			if not foundL1:
 				# print (red,"continue p2",res)
 				continue
@@ -10494,7 +10499,7 @@ def findMovDerefGetStack(id_func,reg,bad,length1, excludeRegs,regsNotUsed,espDes
 			if foundL1 and foundAdd and foundMEsp:
 				# cMEsp=chainObj(mEsp, "Save esp to "+reg, [])
 				cA=chainObj(a1, "Adjust " +reg +" to parameter ", [])
-				if comment !=None:
+				if comment !="":
 					cA=chainObj(a1, comment, [])
 
 				cA=pkBuild([cA])
@@ -10644,13 +10649,14 @@ def makePointer(reg, bad,length1, excludeRegs,espDesiredMovement,distParam,tVal=
 					excludeRegs2.append(r2)
 
 					foundT4, gT2 = findUniTransfer("17",reg,r3, bad,length1,excludeRegs2,0, "Transfer to " + reg + " - Creating a pointer for " + hex(tVal) +" - " + comment)
-					gT=pkBuild([gT,gT2])
 					if not foundT4:
 						# print ("continue a1", op2, op3, "reg")
 						continue
 					else:
 						finishedLoop=True
 						break
+					gT=pkBuild([gT,gT2])
+
 			else:
 				finishedLoop=True
 	if finishedLoop:
@@ -14537,6 +14543,7 @@ class getParamVals:
 	def get_JmpESP(self,name,excludeRegs,r,r2,bad,pk):
 		foundJ, j1 = findGenericC2AgnosticJmpCall("jmp","esp",bad,True, [],0)
 		comment=""
+		tryThis=""
 		if foundJ:	
 			try:
 				tryThis=tryThisFunc(j1)
@@ -14847,7 +14854,7 @@ class getParamVals:
 	# use ESP to load a string like "http://httpbin.org/image/jpeg"
 	# TODO: varStr = "http://httpbin.org/image/jpeg"
 		value=0xddddffff
-		comment="szURL = \"http:\/\/httpbin.org\/image\/jpeg\""
+		comment='szURL = "http://httpbin.org/image/jpeg"'
 		extra="ptr to str"
 		return True, value,comment, extra
 
@@ -16830,7 +16837,687 @@ def buildPushadEverything(bad):
 		print (red,"  error: OPT", res)
 		
 
+def buildPushadEverythingTemp2(bad):
+	global timeStopBP
+	global timeStartBP
 
+	timeStartBP = timeit.default_timer()
+
+	
+	excludeRegs=[]
+	global opt
+	bad=opt["badBytes"]
+
+	gTrackerFull.reset()
+
+	# gTrackerFull = gadgetTracker()
+	# gTrackerFull.show()
+
+	global curPat
+	global oldPat
+	availableRegs=["eax", "ebx","ecx","edx", "esi","edi","ebp"]
+	for reg in excludeRegs:
+		availableRegs.remove(reg)
+	length1=True
+	espDesiredMovement=0
+	regs=["eax","ebx","ecx","edx","edi","esi","ebp","esp"]
+	excludeRegs2= copy.deepcopy(excludeRegs)
+	outputs=[]
+	pk=[]
+	oldPat=""
+
+	try:
+		stopCode="GPA"
+		foundInner1, oldApiCode,pk1,pkPA1=buildPushadInner(bad,excludeRegs2,"LoadLibrary",9,"apiCode",pk,pk,stopCode,"targetDllString",True)
+		if foundInner1:
+			oldPat+=oldApiCode + " "
+			foundInnerGPA,outputsTxtGPA, outputsTxtCGPA,outputsPkGPA=buildPushadInner(bad,excludeRegs2,"GetProcAddress",11,"apiCode",pk1,pkBuild([pkPA1]),stopCode,"targetDllString",True)
+			if foundInnerGPA:
+				fgc.addsrGetProcAddress(fChainObj(outputsPkGPA,outputsTxtGPA,outputsTxtCGPA))
+				printGadgetChain(outputsTxtGPA, "sr_GetProcAddress",True)
+		
+		
+	except:
+		print (red,"  error: GPA", res)
+		pass
+
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		stopCode="SYS"
+		foundInner1,oldApiCode, pk1,pkPA1=buildPushadInner(bad,excludeRegs2,"LoadLibrary",9,"apiCode",pk,pk,stopCode, "System",True)
+		if foundInner1:
+			oldPat+=oldApiCode + " "
+			foundInner2, oldApiCode,pk2,pkPA2=buildPushadInner(bad,excludeRegs2,"GetProcAddress",11,"apiCode",pk1,pkBuild([pkPA1]),stopCode, "System",True)
+			if foundInner2:
+				oldPat+=oldApiCode + " "
+				pkTemp=pkBuild([pk1,pk2])
+				pk=pkBuild([pkPA1,pkPA2])
+				foundInnerSys,outputsTxtSys,outputsTxtCSys, outputsPkSys=buildPushadInner(bad,excludeRegs2,"System",9,"apiCode",pkTemp,pkBuild([pkPA1,pkPA2]),stopCode, "System",True)
+				if foundInnerSys:
+					fgc.addsrSystem(fChainObj(outputsPkSys,outputsTxtSys,outputsTxtCSys))
+					printGadgetChain(outputsTxtSys, "System",True)
+
+	except:
+		print (red,"  error: SYS", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		timeStartBP = timeit.default_timer()
+
+		stopCode="WE"
+		foundInnerWE,outputsTxtWE, outputsTxtCWE,outputsPkWE=buildPushadInner(bad,excludeRegs2,"WE",10,"apiCode",pk,pk,stopCode)
+		if foundInnerWE:
+			printGadgetChain(outputsTxtWE, "WinExec,True")
+	except:
+		print (red,"  error: WE", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		timeStartBP = timeit.default_timer()
+
+
+		stopCode="DF"
+		foundInnerWE,outputsTxtWE, outputsTxtCWE,outputsPkWE=buildPushadInner(bad,excludeRegs2,"DF",17,"apiCode",pk,pk,stopCode)
+		if foundInnerWE:
+			printGadgetChain(outputsTxtWE, "DeleteFileA",True)
+	except:
+		print (red,"  error: DF", res)
+
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="HC"
+		foundInnerHC,outputsTxtHC, outputsTxtCHC,outputsPkHC=buildPushadInner(bad,excludeRegs2,"HeapCreate",1,"apiCode",pk,pk,stopCode)
+		if foundInnerHC:
+			printGadgetChain(outputsTxtHC, "HeapCreate",True)
+
+	except:
+		print (red,"  error: HC", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="HA"
+		foundInnerHA,outputsTxtHA, outputsTxtCHA,outputsPkHA=buildPushadInner(bad,excludeRegs2,"HeapAlloc",1,"apiCode",pk,pk,stopCode)
+		if foundInnerHA:
+			printGadgetChain(outputsTxtHA, "HeapAlloc",True)
+
+	except:
+		print (red,"  error: HA", res)
+
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+
+		gTrackerFull.reset()
+
+		stopCode="WPM"
+		foundInnerWPM,outputsTxtWPM, outputsTxtCWPM,outputsPkWPM=buildPushadInner(bad,excludeRegs2,"WriteProcessMemory",1,"apiCode",pk,pk,stopCode)
+		if foundInnerWPM:
+			printGadgetChain(outputsTxtWPM, "WriteProcessMemory",True)
+	except:
+		print (red,"  error: WPM", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="OSCM"
+		foundInnerOSCM,outputsTxtOSCM, outputsTxtCOSCM,outputsPkOSCM=buildPushadInner(bad,excludeRegs2,"OpenSCManagerA",1,"apiCode",pk,pk,stopCode)
+		if foundInnerOSCM:
+			printGadgetChain(outputsTxtOSCM, "OpenSCManagerA",True)
+	
+	except:
+		print (red,"  error: OSCM", res)
+		
+
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="HG32"
+		foundInnerHG,outputsTxtHG, outputsTxtCHG,outputsPkHG=buildPushadInner(bad,excludeRegs2,"HG",11,"apiCode",pk,pk,stopCode)
+		if foundInnerHG:
+			fgc.addHg32to64(fChainObj(outputsPkHG,outputsTxtHG,outputsTxtCHG))
+			printGadgetChain(outputsTxtHG, "Heavens_Gate_32_to_64",True)
+	except:
+		print (red,"  error: HG32", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="VP"
+		foundInnerVP,outputsTxtVP, outputsTxtCVP,outputsPkVP=buildPushadInner(bad,excludeRegs2,"VP",2,"apiCode",pk,pk,stopCode)
+		if foundInnerVP:
+			# fgc.addHg32to64(fChainObj(outputsPkHG,outputsTxtHG,outputsTxtCHG))
+			#todo
+			printGadgetChain(outputsTxtVP, "VirtualProtect",True)
+		
+	except:
+		print (red,"  error: VP", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="VA"
+		foundInnerVP,outputsTxtVP, outputsTxtCVP,outputsPkVP=buildPushadInner(bad,excludeRegs2,"VA",2,"apiCode",pk,pk,stopCode)
+		if foundInnerVP:
+			# fgc.addHg32to64(fChainObj(outputsPkHG,outputsTxtHG,outputsTxtCHG))
+			#todo
+			printGadgetChain(outputsTxtVP, "VirtualAlloc",True)
+	except:
+		print (red,"  error: VA", res)
+
+		pass
+
+	
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="UDTF"
+		foundInnerUFA,outputsTxtUFA, outputsTxtCUFA,outputsPkUFA=buildPushadInner(bad,excludeRegs2,"UDTF",2,"apiCode",pk,pk,stopCode)
+		if foundInnerUFA:
+			printGadgetChain(outputsTxtUFA, "URLDownloadToFile",True)
+	except:
+		print (red,"  error: UDTF", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="OP"
+		foundInnerOP,outputsTxtOP, outputsTxtCOP,outputsPkOP=buildPushadInner(bad,excludeRegs2,"OpenProcess",5,"apiCode",pk,pk,stopCode)
+		if foundInnerOP:
+			printGadgetChain(outputsTxtOP, "OpenProcess",True)
+	except:
+		print (red,"  error: OP", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="P32F"
+		foundInnerPF,outputsTxtPF, outputsTxtCPF,outputsPkPF=buildPushadInner(bad,excludeRegs2,"P32F",10,"apiCode",pk,pk,stopCode)
+		if foundInnerPF:
+			printGadgetChain(outputsTxtPF, "Process32First",True)
+	except:
+		print (red,"  error: P32F", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="P32N"
+		foundInnerPN,outputsTxtPN, outputsTxtCPN,outputsPkPN=buildPushadInner(bad,excludeRegs2,"P32N",10,"apiCode",pk,pk,stopCode)
+		if foundInnerPN:
+			printGadgetChain(outputsTxtPN, "Process32Next",True)
+	except:
+		print (red,"  error: P32N", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="RSKV"
+		foundInnerRV,outputsTxtRV, outputsTxtCRV,outputsPkRV=buildPushadInner(bad,excludeRegs2,"RSKV",1,"apiCode",pk,pk,stopCode)
+		if foundInnerRV:
+			printGadgetChain(outputsTxtRV, "RegSetKeyValueA",True)
+	except:
+		print (red,"  error: RSKV", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="RCKV"
+		foundInnerRC,outputsTxtRC, outputsTxtCRC,outputsPkRC=buildPushadInner(bad,excludeRegs2,"RCKV",1,"apiCode",pk,pk,stopCode)
+		if foundInnerRC:
+			printGadgetChain(outputsTxtRC, "RegCreateKeyA",True)
+	except:
+		print (red,"  error: RCKV", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="CRT"
+		foundInnerCRT,outputsTxtCRT, outputsTxtCCRT,outputsPkCRT=buildPushadInner(bad,excludeRegs2,"CreateRemoteThread",1,"apiCode",pk,pk,stopCode)
+		if foundInnerCRT:
+			printGadgetChain(outputsTxtCRT, "CreateRemoteThread",True)
+	except:
+		print (red,"  error: CRT", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="VAE"
+		foundInnerVPE,outputsTxtVPE, outputsTxtCVPE,outputsPkVPE=buildPushadInner(bad,excludeRegs2,"VirtualAllocEx",1,"apiCode",pk,pk,stopCode)
+		if foundInnerVPE:
+			printGadgetChain(outputsTxtVPE, "VirtualAllocEx",True)
+	except:
+		print (red,"  error: VAE", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="TP"
+		foundInnerTP,outputsTxtTP, outputsTxtCTP,outputsPkTP=buildPushadInner(bad,excludeRegs2,"TerminateProcess",1,"apiCode",pk,pk,stopCode)
+		if foundInnerTP:
+			printGadgetChain(outputsTxtTP, "TerminateProcess",True)
+
+		gTrackerFull.reset()
+	except:
+		print (red,"  error: TP", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		stopCode="OPT"
+		foundInnerOPT,outputsTxtOPT, outputsTxtCOPT,outputsPkOPT=buildPushadInner(bad,excludeRegs2,"OpenProcessToken",1,"apiCode",pk,pk,stopCode)
+		if foundInnerOPT:
+			printGadgetChain(outputsTxtOPT, "OpenProcessToken",True)
+		gTrackerFull.reset()
+	except:
+		print (red,"  error: OPT", res)
+
+
+def buildPushadEverythingTemp(bad):
+	global timeStopBP
+	global timeStartBP
+
+	timeStartBP = timeit.default_timer()
+
+	
+	excludeRegs=[]
+	global opt
+	bad=opt["badBytes"]
+
+	gTrackerFull.reset()
+
+	# gTrackerFull = gadgetTracker()
+	# gTrackerFull.show()
+
+	global curPat
+	global oldPat
+	availableRegs=["eax", "ebx","ecx","edx", "esi","edi","ebp"]
+	for reg in excludeRegs:
+		availableRegs.remove(reg)
+	length1=True
+	espDesiredMovement=0
+	regs=["eax","ebx","ecx","edx","edi","esi","ebp","esp"]
+	excludeRegs2= copy.deepcopy(excludeRegs)
+	outputs=[]
+	pk=[]
+	oldPat=""
+
+	try:
+		stopCode="GPA"
+		foundInner1, oldApiCode,pk1,pkPA1=buildPushadInner(bad,excludeRegs2,"LoadLibrary",9,"apiCode",pk,pk,stopCode,"targetDllString",True)
+		if foundInner1:
+			oldPat+=oldApiCode + " "
+			foundInnerGPA,outputsTxtGPA, outputsTxtCGPA,outputsPkGPA=buildPushadInner(bad,excludeRegs2,"GetProcAddress",11,"apiCode",pk1,pkBuild([pkPA1]),stopCode,"targetDllString",True)
+			if foundInnerGPA:
+				fgc.addsrGetProcAddress(fChainObj(outputsPkGPA,outputsTxtGPA,outputsTxtCGPA))
+				printGadgetChain(outputsTxtGPA, "sr_GetProcAddress",True)
+		
+		
+	except:
+		print (red,"  error: GPA", res)
+		pass
+
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		stopCode="SYS"
+		foundInner1,oldApiCode, pk1,pkPA1=buildPushadInner(bad,excludeRegs2,"LoadLibrary",9,"apiCode",pk,pk,stopCode, "System",True)
+		if foundInner1:
+			oldPat+=oldApiCode + " "
+			foundInner2, oldApiCode,pk2,pkPA2=buildPushadInner(bad,excludeRegs2,"GetProcAddress",11,"apiCode",pk1,pkBuild([pkPA1]),stopCode, "System",True)
+			if foundInner2:
+				oldPat+=oldApiCode + " "
+				pkTemp=pkBuild([pk1,pk2])
+				pk=pkBuild([pkPA1,pkPA2])
+				foundInnerSys,outputsTxtSys,outputsTxtCSys, outputsPkSys=buildPushadInner(bad,excludeRegs2,"System",9,"apiCode",pkTemp,pkBuild([pkPA1,pkPA2]),stopCode, "System",True)
+				if foundInnerSys:
+					fgc.addsrSystem(fChainObj(outputsPkSys,outputsTxtSys,outputsTxtCSys))
+					printGadgetChain(outputsTxtSys, "System",True)
+
+	except:
+		print (red,"  error: SYS", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		timeStartBP = timeit.default_timer()
+
+		stopCode="WE"
+		foundInnerWE,outputsTxtWE, outputsTxtCWE,outputsPkWE=buildPushadInner(bad,excludeRegs2,"WE",10,"apiCode",pk,pk,stopCode)
+		if foundInnerWE:
+			printGadgetChain(outputsTxtWE, "WinExec,True")
+	except:
+		print (red,"  error: WE", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		timeStartBP = timeit.default_timer()
+
+
+		stopCode="DF"
+		foundInnerWE,outputsTxtWE, outputsTxtCWE,outputsPkWE=buildPushadInner(bad,excludeRegs2,"DF",17,"apiCode",pk,pk,stopCode)
+		if foundInnerWE:
+			printGadgetChain(outputsTxtWE, "DeleteFileA",True)
+	except:
+		print (red,"  error: DF", res)
+
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="HC"
+		foundInnerHC,outputsTxtHC, outputsTxtCHC,outputsPkHC=buildPushadInner(bad,excludeRegs2,"HeapCreate",1,"apiCode",pk,pk,stopCode)
+		if foundInnerHC:
+			printGadgetChain(outputsTxtHC, "HeapCreate",True)
+
+	except:
+		print (red,"  error: HC", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="HA"
+		foundInnerHA,outputsTxtHA, outputsTxtCHA,outputsPkHA=buildPushadInner(bad,excludeRegs2,"HeapAlloc",1,"apiCode",pk,pk,stopCode)
+		if foundInnerHA:
+			printGadgetChain(outputsTxtHA, "HeapAlloc",True)
+
+	except:
+		print (red,"  error: HA", res)
+
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+
+		gTrackerFull.reset()
+
+		stopCode="WPM"
+		foundInnerWPM,outputsTxtWPM, outputsTxtCWPM,outputsPkWPM=buildPushadInner(bad,excludeRegs2,"WriteProcessMemory",1,"apiCode",pk,pk,stopCode)
+		if foundInnerWPM:
+			printGadgetChain(outputsTxtWPM, "WriteProcessMemory",True)
+	except:
+		print (red,"  error: WPM", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="OSCM"
+		foundInnerOSCM,outputsTxtOSCM, outputsTxtCOSCM,outputsPkOSCM=buildPushadInner(bad,excludeRegs2,"OpenSCManagerA",1,"apiCode",pk,pk,stopCode)
+		if foundInnerOSCM:
+			printGadgetChain(outputsTxtOSCM, "OpenSCManagerA",True)
+	
+	except:
+		print (red,"  error: OSCM", res)
+		
+
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="HG32"
+		foundInnerHG,outputsTxtHG, outputsTxtCHG,outputsPkHG=buildPushadInner(bad,excludeRegs2,"HG",11,"apiCode",pk,pk,stopCode)
+		if foundInnerHG:
+			fgc.addHg32to64(fChainObj(outputsPkHG,outputsTxtHG,outputsTxtCHG))
+			printGadgetChain(outputsTxtHG, "Heavens_Gate_32_to_64",True)
+	except:
+		print (red,"  error: HG32", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="VP"
+		foundInnerVP,outputsTxtVP, outputsTxtCVP,outputsPkVP=buildPushadInner(bad,excludeRegs2,"VP",2,"apiCode",pk,pk,stopCode)
+		if foundInnerVP:
+			# fgc.addHg32to64(fChainObj(outputsPkHG,outputsTxtHG,outputsTxtCHG))
+			#todo
+			printGadgetChain(outputsTxtVP, "VirtualProtect",True)
+		
+	except:
+		print (red,"  error: VP", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="VA"
+		foundInnerVP,outputsTxtVP, outputsTxtCVP,outputsPkVP=buildPushadInner(bad,excludeRegs2,"VA",2,"apiCode",pk,pk,stopCode)
+		if foundInnerVP:
+			# fgc.addHg32to64(fChainObj(outputsPkHG,outputsTxtHG,outputsTxtCHG))
+			#todo
+			printGadgetChain(outputsTxtVP, "VirtualAlloc",True)
+	except:
+		print (red,"  error: VA", res)
+
+		pass
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="CT32S"
+		foundInnerCT,outputsTxtCT, outputsTxtCCT,outputsPkCT=buildPushadInner(bad,excludeRegs2,"CT32S",11,"apiCode",pk,pk,stopCode)
+		if foundInnerCT:
+			printGadgetChain(outputsTxtCT, "CreateToolhelp32Snapshot")
+	except:
+		print (red,"  error: CT32S", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="UDTF"
+		foundInnerUFA,outputsTxtUFA, outputsTxtCUFA,outputsPkUFA=buildPushadInner(bad,excludeRegs2,"UDTF",2,"apiCode",pk,pk,stopCode)
+		if foundInnerUFA:
+			printGadgetChain(outputsTxtUFA, "URLDownloadToFile",True)
+	except:
+		print (red,"  error: UDTF", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="OP"
+		foundInnerOP,outputsTxtOP, outputsTxtCOP,outputsPkOP=buildPushadInner(bad,excludeRegs2,"OpenProcess",5,"apiCode",pk,pk,stopCode)
+		if foundInnerOP:
+			printGadgetChain(outputsTxtOP, "OpenProcess",True)
+	except:
+		print (red,"  error: OP", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="P32F"
+		foundInnerPF,outputsTxtPF, outputsTxtCPF,outputsPkPF=buildPushadInner(bad,excludeRegs2,"P32F",10,"apiCode",pk,pk,stopCode)
+		if foundInnerPF:
+			printGadgetChain(outputsTxtPF, "Process32First",True)
+	except:
+		print (red,"  error: P32F", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="P32N"
+		foundInnerPN,outputsTxtPN, outputsTxtCPN,outputsPkPN=buildPushadInner(bad,excludeRegs2,"P32N",10,"apiCode",pk,pk,stopCode)
+		if foundInnerPN:
+			printGadgetChain(outputsTxtPN, "Process32Next",True)
+	except:
+		print (red,"  error: P32N", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="RSKV"
+		foundInnerRV,outputsTxtRV, outputsTxtCRV,outputsPkRV=buildPushadInner(bad,excludeRegs2,"RSKV",1,"apiCode",pk,pk,stopCode)
+		if foundInnerRV:
+			printGadgetChain(outputsTxtRV, "RegSetKeyValueA",True)
+	except:
+		print (red,"  error: RSKV", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+		
+		stopCode="RCKV"
+		foundInnerRC,outputsTxtRC, outputsTxtCRC,outputsPkRC=buildPushadInner(bad,excludeRegs2,"RCKV",1,"apiCode",pk,pk,stopCode)
+		if foundInnerRC:
+			printGadgetChain(outputsTxtRC, "RegCreateKeyA",True)
+	except:
+		print (red,"  error: RCKV", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="CRT"
+		foundInnerCRT,outputsTxtCRT, outputsTxtCCRT,outputsPkCRT=buildPushadInner(bad,excludeRegs2,"CreateRemoteThread",1,"apiCode",pk,pk,stopCode)
+		if foundInnerCRT:
+			printGadgetChain(outputsTxtCRT, "CreateRemoteThread",True)
+	except:
+		print (red,"  error: CRT", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="VAE"
+		foundInnerVPE,outputsTxtVPE, outputsTxtCVPE,outputsPkVPE=buildPushadInner(bad,excludeRegs2,"VirtualAllocEx",1,"apiCode",pk,pk,stopCode)
+		if foundInnerVPE:
+			printGadgetChain(outputsTxtVPE, "VirtualAllocEx",True)
+	except:
+		print (red,"  error: VAE", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		gTrackerFull.reset()
+
+		stopCode="TP"
+		foundInnerTP,outputsTxtTP, outputsTxtCTP,outputsPkTP=buildPushadInner(bad,excludeRegs2,"TerminateProcess",1,"apiCode",pk,pk,stopCode)
+		if foundInnerTP:
+			printGadgetChain(outputsTxtTP, "TerminateProcess",True)
+
+		gTrackerFull.reset()
+	except:
+		print (red,"  error: TP", res)
+		
+
+	try:
+		timeStartBP = timeit.default_timer()
+
+		stopCode="OPT"
+		foundInnerOPT,outputsTxtOPT, outputsTxtCOPT,outputsPkOPT=buildPushadInner(bad,excludeRegs2,"OpenProcessToken",1,"apiCode",pk,pk,stopCode)
+		if foundInnerOPT:
+			printGadgetChain(outputsTxtOPT, "OpenProcessToken",True)
+		gTrackerFull.reset()
+	except:
+		print (red,"  error: OPT", res)
 def buildPushad(bad, patType):
 	global timeStopBP
 	global timeStartBP
@@ -21758,6 +22445,12 @@ def ui():
 				sParams.uiSetFillerQuantity()
 			elif userIN[0:3] == "res":
 				researchMode()
+			elif userIN[0:3] == "444":
+				buildPushadEverything(bad)
+			elif userIN[0:3] == "555":
+				buildPushadEverythingTemp(bad)	
+			elif userIN[0:3] == "666":
+				buildPushadEverythingTemp2(bad)	
 			elif userIN[0:2] == "ct":
 				genCreateToolhelp32SnapshotROP()
 			elif userIN[0:1] == "u" or userIN[0:1] == "U":
